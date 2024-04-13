@@ -176,4 +176,4 @@ with gr.Blocks() as RulesLawyer:
     msg.submit(respond, [msg, chatbot], [msg, chatbot])
 
 if __name__ == "__main__":
-    RulesLawyer.launch(server_name = "0.0.0.0", server_port = 8000, share = False, allowed_paths = [])
+    RulesLawyer.launch()
