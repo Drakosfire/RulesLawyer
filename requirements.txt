@@ -1,0 +1,7 @@
+torch
+packaging
+wheel
+pandas
+openai
+sentence_transformers
+gradio
