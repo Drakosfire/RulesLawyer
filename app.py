@@ -5,6 +5,7 @@ from sentence_transformers import util, SentenceTransformer
 import torch
 import time
 from time import perf_counter as timer
+from datetime import datetime
 import textwrap
 import json
 import textwrap
@@ -15,10 +16,7 @@ print("Launching")
 
 client = OpenAI()
 
-# Define helper function to print wrapped text 
-def print_wrapped(text, wrap_length=80):
-    wrapped_text = textwrap.fill(text, wrap_length)
-    print(wrapped_text)
+
 
 # Import saved file and view
 embeddings_df_save_path = "./SRD_embeddings.csv"
@@ -38,6 +36,28 @@ pages_and_chunks = text_chunks_and_embedding_df_load.to_dict(orient="records")
 
 # Convert embeddings to torch tensor and send to device (note: NumPy arrays are float64, torch tensors are float32 by default)
 embeddings = torch.tensor(np.array(text_chunks_and_embedding_df_load["embedding"].tolist()), dtype=torch.float32).to('cpu')
+
+# Define helper function to print wrapped text 
+def print_wrapped(text, wrap_length=80):
+    wrapped_text = textwrap.fill(text, wrap_length)
+    print(wrapped_text)
+
+def hybrid_estimate_tokens(text: str)-> float:
+    # Part 1: Estimate based on spaces and punctuation
+    estimated_words = text.count(' ') + 1  # Counting words by spaces
+    punctuation_count = sum(1 for char in text if char in ',.!?;:')  # Counting punctuation as potential separate tokens
+    estimate1 = estimated_words + punctuation_count
+    
+    # Part 2: Estimate based on total characters divided by average token length
+    average_token_length = 4
+    total_characters = len(text)
+    estimate2 = (total_characters // average_token_length) + punctuation_count
+    
+    # Average the two estimates
+    estimated_tokens = (estimate1 + estimate2) / 2
+
+    return estimated_tokens
+
 
 def retrieve_relevant_resources(query: str,
                                 embeddings: torch.tensor,
@@ -84,18 +104,23 @@ def print_top_results_and_scores(query: str,
     # Loop through zipped together scores and indicies
     for score, index in zip(scores, indices):
         print(f"Score: {score:.4f}")
+        print(f"Token Count : {pages_and_chunks[index]['chunk_token_count']}")
         # Print relevant sentence chunk (since the scores are in descending order, the most relevant chunk will be first)
         print_wrapped(pages_and_chunks[index]["sentence_chunk"])
         # Print the page number too so we can reference the textbook further and check the results
         print(f"File of Origin: {pages_and_chunks[index]['file_path']}")
         print("\n")
 
+    return scores, indices
+
 def prompt_formatter(query: str, 
                      context_items: list[dict]) -> str:
-    """
-    Augments query with text-based context from context_items.
-    """
     # Join context items into one dotted paragraph
+    # print(context_items[0])
+ 
+    # Alternate print method
+    # print("\n".join([item["file_path"] + "\n" + str(item['chunk_token_count']) + "\n" + item["sentence_chunk"] for item in context_items]))
+
     context = "- " + "\n- ".join([item["sentence_chunk"] for item in context_items])
 
     # Create a base prompt with examples to help the model
@@ -139,23 +164,36 @@ Use the context provided to answer the user's query concisely. """
 
 
 with gr.Blocks() as RulesLawyer:
+
+    message_state = gr.State()
+    chatbot_state = gr.State([])
     chatbot = gr.Chatbot()
     msg = gr.Textbox()
     clear = gr.ClearButton([msg, chatbot])
 
+    def store_message(message): 
+          
+        return message
+        
+
     def respond(message, chat_history):
+        print(datetime.now())
+        print(f"User Input : {message}")
+        print(f"Chat History: {chat_history}")
+        print(f"""Token Estimate: {hybrid_estimate_tokens(f"{message} {chat_history}")}""")
 
         # Get relevant resources
-        scores, indices = retrieve_relevant_resources(query=message,
+        scores, indices = print_top_results_and_scores(query=message,
                                                     embeddings=embeddings)
-            
+                    
         # Create a list of context items
         context_items = [pages_and_chunks[i] for i in indices]
+        
 
         # Format prompt with context items
-        prompt = prompt_formatter(query=message,
+        prompt = prompt_formatter(query=f"Chat History : {chat_history} + {message}",
                                 context_items=context_items)
-        print(prompt)
+        
         bot_message = client.chat.completions.create(            
                         model="gpt-4",
                         messages=[
@@ -171,9 +209,13 @@ with gr.Blocks() as RulesLawyer:
                         presence_penalty=0
                         )
         chat_history.append((message, bot_message.choices[0].message.content))
+        print(f"Response : {bot_message.choices[0].message.content}")
+        
         time.sleep(2)
         return "", chat_history
-    msg.submit(respond, [msg, chatbot], [msg, chatbot])
+    msg.change(store_message, inputs = [msg], outputs = [message_state])
+    chatbot.change(store_message, [chatbot], [chatbot_state])
+    msg.submit(respond, [message_state, chatbot_state], [msg, chatbot])
 
 if __name__ == "__main__":
     RulesLawyer.launch()
