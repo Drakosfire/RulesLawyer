@@ -195,7 +195,7 @@ with gr.Blocks() as RulesLawyer:
                                 context_items=context_items)
         
         bot_message = client.chat.completions.create(            
-                        model="gpt-4",
+                        model="gpt-4o",
                         messages=[
                             {
                             "role": "user",
