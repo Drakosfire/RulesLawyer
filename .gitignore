@@ -1,0 +1,17 @@
+*.pdf
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+*.bz2
+*.xz
+*.zipx
+
+# Folders
+__pycache__
+pdfs/
+output/
+docling/
+scripts/
+
