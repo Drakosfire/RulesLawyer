@@ -8,31 +8,49 @@ from time import perf_counter as timer
 from datetime import datetime
 import textwrap
 import json
-import textwrap
-
 import gradio as gr
 
 print("Launching")
 
 client = OpenAI()
 
+# Load the enhanced JSON file with summaries
+def load_enhanced_json(file_path):
+    with open(file_path, 'r') as file:
+        return json.load(file)
 
+enhanced_json_file = "Swords&Wizardry_enhanced_output.json"
+enhanced_data = load_enhanced_json(enhanced_json_file)
+
+# Extract document summary and page summaries
+document_summary = enhanced_data.get('document_summary', 'No document summary available.')
+page_summaries = {int(page): data['summary'] for page, data in enhanced_data.get('pages', {}).items()}
 
 # Import saved file and view
-embeddings_df_save_path = "./SRD_embeddings.csv"
+embeddings_df_save_path = "Swords&Wizardry_output_embeddings.csv"
 print("Loading embeddings.csv")
 text_chunks_and_embedding_df_load = pd.read_csv(embeddings_df_save_path)
 print("Embedding file loaded")
-embedding_model_path = "BAAI/bge-m3"
-print("Loading embedding model")
-embedding_model = SentenceTransformer(model_name_or_path=embedding_model_path, 
-                                      device='cpu') # choose the device to load the model to
 
 # Convert the stringified embeddings back to numpy arrays
 text_chunks_and_embedding_df_load['embedding'] = text_chunks_and_embedding_df_load['embedding_str'].apply(lambda x: np.array(json.loads(x)))
 
 # Convert texts and embedding df to list of dicts
 pages_and_chunks = text_chunks_and_embedding_df_load.to_dict(orient="records")
+
+# Debug: Print the first few rows and column names
+print("DataFrame columns:", text_chunks_and_embedding_df_load.columns)
+print("\nFirst few rows of the DataFrame:")
+print(text_chunks_and_embedding_df_load.head())
+
+# Debug: Print the first item in pages_and_chunks
+# print("\nFirst item in pages_and_chunks:")
+# print(pages_and_chunks[0])
+
+embedding_model_path = "BAAI/bge-m3"
+print("Loading embedding model")
+embedding_model = SentenceTransformer(model_name_or_path=embedding_model_path, 
+                                      device='cpu') # choose the device to load the model to
 
 # Convert embeddings to torch tensor and send to device (note: NumPy arrays are float64, torch tensors are float32 by default)
 embeddings = torch.tensor(np.array(text_chunks_and_embedding_df_load["embedding"].tolist()), dtype=torch.float32).to('cpu')
@@ -101,67 +119,69 @@ def print_top_results_and_scores(query: str,
     
     print(f"Query: {query}\n")
     print("Results:")
-    # Loop through zipped together scores and indicies
-    for score, index in zip(scores, indices):
+    print(f"Number of results: {len(indices)}")
+    print(f"Indices: {indices}")
+    print(f"Total number of chunks: {len(pages_and_chunks)}")
+    
+    for i, (score, index) in enumerate(zip(scores, indices)):
+        print(f"\nResult {i+1}:")
         print(f"Score: {score:.4f}")
-        print(f"Token Count : {pages_and_chunks[index]['chunk_token_count']}")
-        # Print relevant sentence chunk (since the scores are in descending order, the most relevant chunk will be first)
-        print_wrapped(pages_and_chunks[index]["sentence_chunk"])
-        # Print the page number too so we can reference the textbook further and check the results
-        print(f"File of Origin: {pages_and_chunks[index]['file_path']}")
-        print("\n")
+        print(f"Index: {index}")
+        
+        if index < 0 or index >= len(pages_and_chunks):
+            print(f"Error: Index {index} is out of range!")
+            continue
+        
+        chunk = pages_and_chunks[index]
+        print(f"Token Count: {chunk['chunk_token_count']}")
+        print("Available keys:", list(chunk.keys()))
+        print("sentence_chunk content:", repr(chunk.get("sentence_chunk", "NOT FOUND")))
+        
+        chunk_text = chunk.get("sentence_chunk", "Chunk not found")
+        print_wrapped(chunk_text[:200] + "..." if len(chunk_text) > 200 else chunk_text)
+        
+        print(f"File of Origin: {chunk['file_path']}")
 
     return scores, indices
 
-def prompt_formatter(query: str, 
-                     context_items: list[dict]) -> str:
-    # Join context items into one dotted paragraph
-    # print(context_items[0])
- 
-    # Alternate print method
-    # print("\n".join([item["file_path"] + "\n" + str(item['chunk_token_count']) + "\n" + item["sentence_chunk"] for item in context_items]))
+def prompt_formatter(query: str, context_items: list[dict]) -> str:
+    # Include document summary
+    formatted_context = f"Document Summary: {document_summary}\n\n"
 
-    context = "- " + "\n- ".join([item["sentence_chunk"] for item in context_items])
+    # Add context items with their page summaries
+    for item in context_items:
+        page_number = item.get('page', 'Unknown')
+        page_summary = page_summaries.get(page_number, 'No page summary available.')
+        formatted_context += f"Summary: {page_summary}\n"
+        formatted_context += f"Content: {item['sentence_chunk']}\n\n"
 
-    # Create a base prompt with examples to help the model
-    # Note: this is very customizable, I've chosen to use 3 examples of the answer style we'd like.
-    # We could also write this in a txt file and import it in if we wanted.
-    base_prompt = """Now use the following context items to answer the user query: {context}
-    User query: {query}
-    Answer:"""
+    base_prompt = """Use the following context to answer the user query:
 
-    # Update base prompt with context items and query   
-    
+{context}
 
-    
-    return base_prompt.format(context=context, query=query)
+User query: {query}
+Answer:"""
+    print(f"Prompt: {base_prompt.format(context=formatted_context, query=query)}")
+    return base_prompt.format(context=formatted_context, query=query)
 
-system_prompt = """You are a game design expert specializing in Dungeons & Dragons 5e, answering beginner questions with descriptive, clear responses. Provide a story example. Avoid extraneous details and focus on direct answers. Use the examples provided as a guide for style and brevity. When responding:
+system_prompt = """You are a friendly and technical answering system, answering questions with accurate, grounded, descriptive, clear, and specific responses. ALWAYS provide a page number citation. Provide a story example. Avoid extraneous details and focus on direct answers. Use the examples provided as a guide for style and brevity. When responding:
 
     1. Identify the key point of the query.
     2. Provide a straightforward answer, omitting the thought process.
     3. Avoid additional advice or extended explanations.
-    4. Answer in an informative manner, aiding the user's understanding without overwhelming them.
-    5. DO NOT SUMMARIZE YOURSELF. DO NOT REPEAT YOURSELF.
-    6. End with a line break and "What else can I help with?" 
+    4. Answer in an informative manner, aiding the user's understanding without overwhelming them or quoting the source.
+    5. DO NOT SUMMARIZE YOURSELF. DO NOT REPEAT YOURSELF. 
+    6. End with page citations, a line break and "What else can I help with?" 
 
-Refer to these examples for your response style:
+    Example:
+    Query: Explain how the player should think about balance and lethality in this game. Explain how the game master should think about balance and lethality?
+    Answer: In "Swords & Wizardry: WhiteBox," players and the game master should consider balance and lethality from different perspectives. For players, understanding that this game encourages creativity and flexibility is key. The rules are intentionally streamlined, allowing for a potentially high-risk environment where player decisions significantly impact outcomes. The players should think carefully about their actions and strategy, knowing that the game can be lethal, especially without reliance on intricate rules for safety. Page 33 discusses the possibility of characters dying when their hit points reach zero, although alternative, less harsh rules regarding unconsciousness and recovery are mentioned.
 
-Example 1:
-Query: How do I determine what my magic ring does in D&D?
-Answer: To learn what your magic ring does, use the Identify spell, take a short rest to study it, or consult a knowledgeable character. Once known, follow the item's instructions to activate and use its powers.
+For the game master (referred to as the Referee), balancing the game involves providing fair yet challenging scenarios. The role of the Referee isn't to defeat players but to present interesting and dangerous challenges that enhance the story collaboratively. Page 39 outlines how the Referee and players work together to craft a narrative, with the emphasis on creating engaging and potentially perilous experiences without making it a zero-sum competition. Referees can choose how lethal the game will be, considering their group's preferred play style, including implementing house rules to soften deaths or adjust game balance accordingly.
 
-Example 2:
-Query: What's the effect of the spell fireball?
-Answer: Fireball is a 3rd-level spell creating a 20-foot-radius sphere of fire, dealing 8d6 fire damage (half on a successful Dexterity save) to creatures within. It ignites flammable objects not worn or carried.
-
-Example 3:
-Query: How do spell slots work for a wizard?
-Answer: Spell slots represent your capacity to cast spells. You use a slot of equal or higher level to cast a spell, and you regain all slots after a long rest. You don't lose prepared spells after casting; they can be reused as long as you have available slots.
+Pages: 33, 39
 
 Use the context provided to answer the user's query concisely. """
-
-
 
 with gr.Blocks() as RulesLawyer:
 
@@ -171,10 +191,8 @@ with gr.Blocks() as RulesLawyer:
     msg = gr.Textbox()
     clear = gr.ClearButton([msg, chatbot])
 
-    def store_message(message): 
-          
-        return message
-        
+    def store_message(message):           
+        return message       
 
     def respond(message, chat_history):
         print(datetime.now())
@@ -188,11 +206,10 @@ with gr.Blocks() as RulesLawyer:
                     
         # Create a list of context items
         context_items = [pages_and_chunks[i] for i in indices]
-        
 
         # Format prompt with context items
         prompt = prompt_formatter(query=f"Chat History : {chat_history} + {message}",
-                                context_items=context_items)
+                                  context_items=context_items)
         
         bot_message = client.chat.completions.create(            
                         model="gpt-4o",
@@ -203,7 +220,7 @@ with gr.Blocks() as RulesLawyer:
                             }
                         ],
                         temperature=1,
-                        max_tokens=512,
+                        max_tokens=1000,
                         top_p=1,
                         frequency_penalty=0,
                         presence_penalty=0
