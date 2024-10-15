@@ -19,7 +19,7 @@ def load_enhanced_json(file_path):
     with open(file_path, 'r') as file:
         return json.load(file)
 
-enhanced_json_file = "Swords&Wizardry_enhanced_output.json"
+enhanced_json_file = "SwordsAndWizardry_enhanced_output.json"
 enhanced_data = load_enhanced_json(enhanced_json_file)
 
 # Extract document summary and page summaries
@@ -27,7 +27,7 @@ document_summary = enhanced_data.get('document_summary', 'No document summary av
 page_summaries = {int(page): data['summary'] for page, data in enhanced_data.get('pages', {}).items()}
 
 # Import saved file and view
-embeddings_df_save_path = "Swords&Wizardry_output_embeddings.csv"
+embeddings_df_save_path = "SwordsAndWizardry_output_embeddings.csv"
 print("Loading embeddings.csv")
 text_chunks_and_embedding_df_load = pd.read_csv(embeddings_df_save_path)
 print("Embedding file loaded")
