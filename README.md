@@ -9,7 +9,7 @@ app_file: app.py
 pinned: false
 ---
 
-# Retrieval Augmented Generation for Wizardsa & Wizardy Rule Sets
+# Retrieval Augmented Generation for Wizards & Wizardy Rule Sets
 
 ## Project Overview
 
