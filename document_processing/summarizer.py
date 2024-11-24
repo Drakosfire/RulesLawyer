@@ -4,6 +4,8 @@ client = OpenAI()
 
 def summarize_page(page_content):
     print(f"Summarizing page: {page_content}")
+    if page_content == "":
+        return ""
     page_system_prompt = "These are the text entries from a single page of a document. Please parse any messy text and concisely summarize the page. The summary will be used as context in a Retrieval Augmented Generation (RAG) application and should be focused on the critical contents of the page such as the plot, characters, setting, and important details or mechanics. Include the only page number as Page Number: <page number>, the summary."
     
     page_summary_message = client.chat.completions.create(            
