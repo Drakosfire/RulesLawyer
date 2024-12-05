@@ -108,7 +108,7 @@ def process_document(md_path: str, json_path: str, chunk_size: int = 2000, overl
     df = pd.DataFrame({
         'page': [chunk['page'] for chunk in chunks],
         'sections': [json.dumps(chunk['sections']) for chunk in chunks], # Headers from the page
-        'sentence_chunk': [chunk['content'] for chunk in chunks],
+        'content': [chunk['content'] for chunk in chunks],
         'chunk_char_count': [len(chunk['content']) for chunk in chunks],
         'chunk_word_count': [len(chunk['content'].split()) for chunk in chunks],
         'chunk_token_count': [len(chunk['content'].split()) * 1.3 for chunk in chunks],
@@ -117,6 +117,6 @@ def process_document(md_path: str, json_path: str, chunk_size: int = 2000, overl
 
     # Remove rows with sentence_chunks less than 200 characters
     # print("Removing rows with sentence chunks less than 200 characters...")
-    df = df[df['sentence_chunk'].str.len() >= 200]
+    df = df[df['chunk_char_count'] >= 200]
 
     return df

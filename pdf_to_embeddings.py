@@ -156,7 +156,7 @@ class PDFToEmbeddings:
             print("Could not calculate time per page: conversion process did not complete")
 
 if __name__ == "__main__":
-    source = "./pdfs/test_document.pdf"
+    source = "./pdfs/DnD_PHB_5.5.pdf"
     pdf_to_embeddings = PDFToEmbeddings(source)
     pdf_to_embeddings.run()
 

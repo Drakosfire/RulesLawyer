@@ -7,12 +7,14 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-docling-core = "^2.4.0"
 langchain = "^0.3.7"
 langchain-community = "^0.3.7"
 langchain-text-splitters = "^0.3.2"
 sentence-transformers = "^3.3.1"
 langchain-huggingface = "^0.1.2"
+docling-core = {path = "docling-core"}
+gradio = "^5.6.0"
+
 
 
 
