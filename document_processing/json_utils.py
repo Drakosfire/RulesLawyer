@@ -2,20 +2,7 @@ import json
 import sys
 import os
 from document_processing.utilities import get_file_name_without_ext
-from docling_core.types.doc.document import DoclingDocument, DocItemLabel
-# Get the correct path to docling-core
-current_dir = os.path.dirname(os.path.abspath(__file__))
-print(f"Current directory: {current_dir}")
-
-# docling-core is in the same directory as the script
-docling_core_path = os.path.join(current_dir, 'docling-core')
-
-
-# Add to Python path
-sys.path.insert(0, docling_core_path)
-
-# Now try the import
-from docling_core.types.doc.document import DoclingDocument
+from document_processing.docling_core_type_document import DoclingDocument, DocItemLabel
 
 def save_to_file(content, filename):
     with open(filename, 'w', encoding='utf-8') as f:
