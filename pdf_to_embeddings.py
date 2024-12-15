@@ -1,25 +1,16 @@
-#docling_pdf.py
-#This script uses Docling to convert a PDF to a JSON file.
-#It then uses OpenAI to summarize each page and the entire document.
+# docling_pdf.py
+# This script uses Docling to convert a PDF to a JSON file.
+# It then uses OpenAI to summarize each page and the entire document.
+# It also creates a markdown file.
 #It then saves the summarized JSON to a file.
-# Instructions: 
-# 1. Update the source variable to the path of the PDF file you want to convert.
-# 2. Run the script.
-# 3. Check the output in the output folder.
-# 4. Then run jsontomd.py to create the markdown file.
-# 5. Then run jsonToEmbeddings.py to create the embeddings.  
-# 6. Point the app.py to the enhanced JSON file.
-# 7. Run app.py to start the gradio web app.
+
 
 import time
 import os
 import json
 import sys
-from PyPDF2 import PdfReader
-import logging
 from openai import OpenAI
 from tqdm import tqdm
-import math
 from document_processing.pdf_utils import check_pdf, check_pdf_details, estimate_conversion_time, format_time
 from document_processing.json_utils import save_to_file, load_json, extract_text_by_page, save_enhanced_json, page_enhanced_markdown_export
 from document_processing.summarizer import summarize_page, summarize_document
@@ -56,8 +47,16 @@ class PDFToEmbeddings:
         self.start_time = time.time()
         self.last_step_time = self.start_time
         self.pages = check_pdf_details(self.source)
+    # Check if existing files exist and prompt user for overwrite
+    def check_existing_files(self, file_path):
+        if os.path.exists(file_path):
+            print(f"File {file_path} already exists. Overwrite? (y/n)")
+            if input().lower() != "y": 
+                return False
+        return True
 
     def initialize_converter(self):
+        
         pipeline_options = PdfPipelineOptions()
         pipeline_options.do_ocr = False
         pipeline_options.do_table_structure = True
@@ -134,15 +133,24 @@ class PDFToEmbeddings:
         embeddings_df.to_csv(f"./output/{self.file_name_without_ext}_embeddings.csv", index=False)
 
     def run(self):
-        self.initialize_converter()
-        print("Converting PDF...")
-        self.convert_pdf()
-        print("Processing JSON...")
-        self.process_json()
-        print("Exporting to markdown...")
-        self.export_to_markdown()
-        print("Creating embeddings...")
-        self.create_embeddings()
+        if not self.check_existing_files(self.json_file):
+            pass
+        else:
+            self.initialize_converter()
+            print("Converting PDF...")
+            self.convert_pdf()
+            print("Processing JSON...")
+            self.process_json()
+        if not self.check_existing_files(self.markdown_file):
+            pass
+        else:
+            print("Exporting to markdown...")
+            self.export_to_markdown()
+        if not self.check_existing_files(f"./output/{self.file_name_without_ext}_embeddings.csv"):
+            pass
+        else:
+            print("Creating embeddings...")
+            self.create_embeddings()
 
         total_time = time.time() - self.start_time
         print(f"\nTotal execution time: {total_time:.2f} seconds")
@@ -156,7 +164,7 @@ class PDFToEmbeddings:
             print("Could not calculate time per page: conversion process did not complete")
 
 if __name__ == "__main__":
-    source = "./pdfs/DnD_PHB_5.5.pdf"
+    source = "./pdfs/PathGM.pdf"
     pdf_to_embeddings = PDFToEmbeddings(source)
     pdf_to_embeddings.run()
 
